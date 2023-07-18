@@ -65,6 +65,8 @@ class Bird(pg.sprite.Sprite):
         self.state = "normal"
         self.hyper_life = -1
         self.beam_mode = False
+        self.fly_mode = False
+        self.beam_mode = False
 
         self.is_jumping = False  #ジャンプ中かどうか。ジャンプ中はTrue、それ以外はFalse。
         self.jump_count = 0  #ジャンプの進行している長さ
@@ -90,6 +92,14 @@ class Bird(pg.sprite.Sprite):
         """
         self.state = state
         self.hyper_life = hyper_life
+    def tick_move(self):
+        """
+        重力による落ちる
+        """
+        self.rect.move_ip(0, 1)
+    
+
+
     def tick_move(self):
         """
         重力による落ちる
@@ -132,6 +142,13 @@ class Bird(pg.sprite.Sprite):
         else:
             self.beam_mode = False
 
+    def change_fly_mode(self): #ビームを出せるかどうか決定
+        if self.fly_mode == False:
+            self.fly_mode = True
+        else:
+            self.is_returning = True
+            self.fly_mode = False
+
     def update(self, key_lst: list[bool], screen: pg.Surface):
         """
         押下キーに応じてこうかとんを移動させる
@@ -157,6 +174,14 @@ class Bird(pg.sprite.Sprite):
             self.image = pg.transform.laplacian(self.image)
         if self.hyper_life < 0:
             self.change_state("normal",-1)
+  
+        for k, mv in __class__.delta.items():
+            if key_lst[k]:
+                    if self.fly_mode == True:
+                        self.rect.move_ip(+self.speed*mv[0], +self.speed*mv[1])
+                        sum_mv[0] += mv[0]
+                        sum_mv[1] += mv[1]
+
 
         if self.state == "fly":  # flyの状態でないなら、重力による落ちる
             for k, mv in __class__.delta.items():
@@ -248,21 +273,32 @@ def main():
 
     tmr = 0
     bird.change_beam_mode() #呼び出すたびに変更.これでTrue    tmr = 0
+    bird.change_beam_mode() #呼び出すたびに変更.これでTrue    tmr = 0
     zimen = pg.Surface((800,200))
     pg.draw.rect(zimen,(0,0,0),(0,0,800,200))
     beams = pg.sprite.Group()
+    beams = pg.sprite.Group()
     while True:
+        key_lst = pg.key.get_pressed()
+        
         key_lst = pg.key.get_pressed()
         
         for event in pg.event.get():
             if event.type == pg.QUIT: return
 
             if event.type == pg.KEYDOWN and event.key == pg.K_TAB:  # tabキーを押す時、birdの状態をflyになる
-                bird.change_state("fly",1)
-            else:
-                bird.change_state("normal",-1)
+                bird.change_fly_mode()
+
             if event.type == pg.KEYDOWN and event.key == pg.K_RETURN and len(beams)<1 and bird.beam_mode:
                 beams.add(Beam(bird))
+                
+        key_lst = pg.key.get_pressed()
+        if event.type == pg.KEYDOWN and event.key == pg.K_TAB:  # tabキーを押す時、birdの状態をflyになる
+            bird.change_state("fly",1)
+        else:
+            bird.change_state("normal",-1)
+        if event.type == pg.KEYDOWN and event.key == pg.K_RETURN and len(beams)<1 and bird.beam_mode:
+            beams.add(Beam(bird))
                 
         key_lst = pg.key.get_pressed()
         key_lst = pg.key.get_pressed()
@@ -279,6 +315,8 @@ def main():
 
         star.update()
         star.draw(screen)
+        beams.update()
+        beams.draw(screen)
         beams.update()
         beams.draw(screen)
         pg.display.update()
