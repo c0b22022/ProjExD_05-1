@@ -45,7 +45,7 @@ class Bird(pg.sprite.Sprite):
         引数2 xy：こうかとん画像の位置座標タプル
         """
         super().__init__()
-        img0 = pg.transform.rotozoom(pg.image.load(f"ex04/fig/{num}.png"), 0, 2.0)
+        img0 = pg.transform.rotozoom(pg.image.load(f"ex04/fig/{num}.png"), 0, 1.0)
         img = pg.transform.flip(img0, True, False)  # デフォルトのこうかとん
         self.imgs = {
             (+1, 0): img,  # 右
@@ -64,6 +64,7 @@ class Bird(pg.sprite.Sprite):
         self.speed = 10
         self.state = "normal"
         self.hyper_life = -1
+        self.beam_mode = False
 
         self.is_jumping = False  #ジャンプ中かどうか。ジャンプ中はTrue、それ以外はFalse。
         self.jump_count = 0  #ジャンプの進行している長さ
@@ -89,6 +90,14 @@ class Bird(pg.sprite.Sprite):
         """
         self.state = state
         self.hyper_life = hyper_life
+    def tick_move(self):
+        """
+        重力による落ちる
+        """
+        self.rect.move_ip(0, 1)
+    
+
+
 
     def jump(self):
         if self.is_jumping:  #  ジャンプをしたとき
@@ -117,6 +126,11 @@ class Bird(pg.sprite.Sprite):
                 self.is_jumping = True  #ジャンプ開始
 
 
+    def change_beam_mode(self): #ビームを出せるかどうか決定
+        if self.beam_mode == False:
+            self.beam_mode = True
+        else:
+            self.beam_mode = False
 
     def update(self, key_lst: list[bool], screen: pg.Surface):
         """
@@ -126,11 +140,11 @@ class Bird(pg.sprite.Sprite):
         """
 
         sum_mv = [0, 0]
-        for k, mv in __class__.delta.items():
-            if key_lst[k]:
-                self.rect.move_ip(+self.speed*mv[0], +self.speed*mv[1])
-                sum_mv[0] += mv[0]
-                sum_mv[1] += mv[1]
+        # for k, mv in __class__.delta.items():
+        #     if key_lst[k]:
+        #         self.rect.move_ip(+self.speed*mv[0], +self.speed*mv[1])
+        #         sum_mv[0] += mv[0]
+        #         sum_mv[1] += mv[1]
         if check_bound(self.rect) != (True, True):
             for k, mv in __class__.delta.items():
                 if key_lst[k]:
@@ -143,6 +157,14 @@ class Bird(pg.sprite.Sprite):
             self.image = pg.transform.laplacian(self.image)
         if self.hyper_life < 0:
             self.change_state("normal",-1)
+
+        if self.state == "fly":  # flyの状態でないなら、重力による落ちる
+            for k, mv in __class__.delta.items():
+                if key_lst[k]:
+                    self.rect.move_ip(+self.speed*mv[0], +self.speed*mv[1])
+                    sum_mv[0] += mv[0]
+                    sum_mv[1] += mv[1]
+
         
         self.jump()
         
@@ -184,7 +206,34 @@ class Star(pg.sprite.Sprite):
 
 
 #障害物破壊
+class Beam(pg.sprite.Sprite):
+    """
+    ビームに関するクラス
+    """
+    def __init__(self, bird: Bird):
+        """
+        ビーム画像Surfaceを生成する
+        引数 bird：ビームを放つこうかとん
+        """
+        super().__init__()
+        self.vx, self.vy = bird.get_direction()
+        angle = math.degrees(math.atan2(0, self.vx)) #横に固定する
+        self.image = pg.transform.rotozoom(pg.image.load(f"ex04/fig/beam.png"), angle, 2.0)
+        self.vx = math.cos(math.radians(angle))
+        self.vy = -math.sin(math.radians(angle))
+        self.rect = self.image.get_rect()
+        self.rect.centery = bird.rect.centery+bird.rect.height*self.vy
+        self.rect.centerx = bird.rect.centerx+bird.rect.width*self.vx
+        self.speed = 5
 
+    def update(self):
+        """
+        ビームを速度ベクトルself.vx, self.vyに基づき移動させる
+        引数 screen：画面Surface
+        """
+        self.rect.move_ip(+self.speed*self.vx, +self.speed*self.vy)
+        if check_bound(self.rect) != (True, True):
+            self.kill()
 
 #地形生成
 
@@ -198,12 +247,24 @@ def main():
     star = pg.sprite.Group()
 
     tmr = 0
+    bird.change_beam_mode() #呼び出すたびに変更.これでTrue    tmr = 0
     zimen = pg.Surface((800,200))
     pg.draw.rect(zimen,(0,0,0),(0,0,800,200))
+    beams = pg.sprite.Group()
     while True:
+        key_lst = pg.key.get_pressed()
+        
         for event in pg.event.get():
             if event.type == pg.QUIT: return
 
+            if event.type == pg.KEYDOWN and event.key == pg.K_TAB:  # tabキーを押す時、birdの状態をflyになる
+                bird.change_state("fly",1)
+            else:
+                bird.change_state("normal",-1)
+            if event.type == pg.KEYDOWN and event.key == pg.K_RETURN and len(beams)<1 and bird.beam_mode:
+                beams.add(Beam(bird))
+                
+        key_lst = pg.key.get_pressed()
         key_lst = pg.key.get_pressed()
         if tmr == 200:
             star.add(Star())
@@ -218,6 +279,8 @@ def main():
 
         star.update()
         star.draw(screen)
+        beams.update()
+        beams.draw(screen)
         pg.display.update()
         tmr += 1
         clock.tick(50)
